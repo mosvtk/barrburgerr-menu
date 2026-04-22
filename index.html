@@ -9,7 +9,7 @@
         :root {
             --bg-color: #121212;
             --card-bg: #1e1e1e;
-            --accent-color: #e53935; /* КРАСНЫЙ АКЦЕНТ */
+            --accent-color: #e53935;
             --text-main: #ffffff;
             --text-dim: #b0b0b0;
         }
@@ -34,27 +34,12 @@
 
         h1 { font-size: 2rem; text-transform: uppercase; letter-spacing: 3px; margin: 0; }
 
-        .upload-section {
-            background: var(--card-bg);
-            padding: 30px;
-            border-radius: 15px;
+        .loader {
             text-align: center;
-            border: 2px dashed #444;
-            margin-bottom: 20px;
-        }
-
-        input[type="file"] {
-            display: none;
-        }
-
-        .custom-file-upload {
-            background: var(--accent-color);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
+            padding: 50px;
+            color: var(--accent-color);
             font-weight: bold;
-            display: inline-block;
+            text-transform: uppercase;
         }
 
         .category-title {
@@ -103,7 +88,7 @@
             align-self: flex-start;
         }
 
-        .hidden { display: none !important; }
+        .error-msg { color: #ff5252; text-align: center; padding: 20px; }
     </style>
 </head>
 <body>
@@ -113,46 +98,40 @@
         <h1>BARR BURGERR</h1>
     </header>
 
-    <div class="upload-section" id="dropzone">
-        <p>Загрузите выгрузку Excel (.xlsx)</p>
-        <label class="custom-file-upload">
-            <input type="file" id="excelFile" accept=".xlsx, .xls">
-            Выбрать файл
-        </label>
-    </div>
-
+    <div id="loader" class="loader">Загружаем меню...</div>
     <div id="menu-content"></div>
 </div>
 
 <script>
-    document.getElementById('excelFile').onchange = function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const data = new Uint8Array(event.target.result);
-            const workbook = XLSX.read(data, {type: 'array'});
-            
-            // Берем первый лист
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            
-            // Превращаем в массив объектов
-            const jsonData = XLSX.utils.sheet_to_json(worksheet);
-            
-            renderMenu(jsonData);
-            document.getElementById('dropzone').classList.add('hidden');
-        };
-        reader.readAsArrayBuffer(file);
-    };
+    // Автоматическая загрузка файла data.xlsx из корня сайта
+    window.addEventListener('DOMContentLoaded', () => {
+        fetch('data.xlsx')
+            .then(res => {
+                if (!res.ok) throw new Error('Файл data.xlsx не найден');
+                return res.arrayBuffer();
+            })
+            .then(ab => {
+                const data = new Uint8Array(ab);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                
+                renderMenu(jsonData);
+                document.getElementById('loader').style.display = 'none';
+            })
+            .catch(err => {
+                document.getElementById('loader').innerHTML = 
+                    `<div class="error-msg">Ошибка: убедитесь, что файл <b>data.xlsx</b> загружен в GitHub</div>`;
+                console.error(err);
+            });
+    });
 
     function renderMenu(data) {
         const container = document.getElementById('menu-content');
         container.innerHTML = '';
 
         data.forEach(item => {
-            // Ищем нужные поля (учитываем возможные пробелы в заголовках)
             const name = item['Наименование'] || item['наименование'];
             const price = item['Цена'] || item['цена'];
             const desc = item['Описание'] || item['описание'] || '';
@@ -160,8 +139,7 @@
 
             if (!name) return;
 
-            // Если цены нет — это заголовок пивоварни
-            if (!price || price === 0 || price === " ") {
+            if (!price || price === 0 || price === " " || price === "") {
                 const catElement = document.createElement('div');
                 catElement.className = 'category-title';
                 catElement.innerText = name;
@@ -169,11 +147,9 @@
                 return;
             }
 
-            // Очистка названия и ссылок
             const cleanName = name.replace('Пиво ', '').replace('Медовуха ', '');
             const firstImg = images.trim().split(/\s+/)[0];
             
-            // Парсинг характеристик (ABV/IBU)
             const statsMatch = desc.match(/\d+(\.\d+)?%\s?ABV|\d+\s?IBU/gi);
             const statsHtml = statsMatch ? `<div class="beer-stats">${statsMatch.join(' | ')}</div>` : '';
 
