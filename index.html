@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BARR BURGERR | Пивное меню</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --accent-color: #e53935; /* КРАСНЫЙ АКЦЕНТ */
+            --text-main: #ffffff;
+            --text-dim: #b0b0b0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 15px;
+            line-height: 1.5;
+        }
+
+        .container { max-width: 600px; margin: 0 auto; }
+
+        header {
+            text-align: center;
+            padding: 30px 0;
+            border-bottom: 2px solid var(--accent-color);
+            margin-bottom: 20px;
+        }
+
+        h1 { font-size: 2rem; text-transform: uppercase; letter-spacing: 3px; margin: 0; }
+
+        .upload-section {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            border: 2px dashed #444;
+            margin-bottom: 20px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .custom-file-upload {
+            background: var(--accent-color);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .category-title {
+            color: var(--accent-color);
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin: 40px 0 15px 0;
+            border-left: 4px solid var(--accent-color);
+            padding-left: 15px;
+            text-transform: uppercase;
+        }
+
+        .beer-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            display: flex;
+            margin-bottom: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .beer-img {
+            width: 90px;
+            height: 130px;
+            object-fit: cover;
+            background: #2a2a2a;
+        }
+
+        .beer-info { padding: 12px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
+
+        .beer-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px; }
+
+        .beer-name { font-size: 1.05rem; font-weight: bold; padding-right: 10px; line-height: 1.2; }
+
+        .beer-price { color: var(--accent-color); font-weight: 800; font-size: 1.1rem; }
+
+        .beer-desc { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 8px; }
+
+        .beer-stats { 
+            font-size: 0.7rem; 
+            font-weight: bold;
+            color: #fff;
+            background: #333; 
+            padding: 2px 8px; 
+            border-radius: 4px; 
+            align-self: flex-start;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>BARR BURGERR</h1>
+    </header>
+
+    <div class="upload-section" id="dropzone">
+        <p>Загрузите выгрузку Excel (.xlsx)</p>
+        <label class="custom-file-upload">
+            <input type="file" id="excelFile" accept=".xlsx, .xls">
+            Выбрать файл
+        </label>
+    </div>
+
+    <div id="menu-content"></div>
+</div>
+
+<script>
+    document.getElementById('excelFile').onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            
+            // Берем первый лист
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            
+            // Превращаем в массив объектов
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            
+            renderMenu(jsonData);
+            document.getElementById('dropzone').classList.add('hidden');
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    function renderMenu(data) {
+        const container = document.getElementById('menu-content');
+        container.innerHTML = '';
+
+        data.forEach(item => {
+            // Ищем нужные поля (учитываем возможные пробелы в заголовках)
+            const name = item['Наименование'] || item['наименование'];
+            const price = item['Цена'] || item['цена'];
+            const desc = item['Описание'] || item['описание'] || '';
+            const images = item['Изображения'] || item['изображения'] || '';
+
+            if (!name) return;
+
+            // Если цены нет — это заголовок пивоварни
+            if (!price || price === 0 || price === " ") {
+                const catElement = document.createElement('div');
+                catElement.className = 'category-title';
+                catElement.innerText = name;
+                container.appendChild(catElement);
+                return;
+            }
+
+            // Очистка названия и ссылок
+            const cleanName = name.replace('Пиво ', '').replace('Медовуха ', '');
+            const firstImg = images.trim().split(/\s+/)[0];
+            
+            // Парсинг характеристик (ABV/IBU)
+            const statsMatch = desc.match(/\d+(\.\d+)?%\s?ABV|\d+\s?IBU/gi);
+            const statsHtml = statsMatch ? `<div class="beer-stats">${statsMatch.join(' | ')}</div>` : '';
+
+            const card = document.createElement('div');
+            card.className = 'beer-card';
+            card.innerHTML = `
+                <img src="${firstImg}" class="beer-img" onerror="this.src='https://via.placeholder.com/100x140?text=%3F'">
+                <div class="beer-info">
+                    <div class="beer-header">
+                        <div class="beer-name">${cleanName}</div>
+                        <div class="beer-price">${price} ₽</div>
+                    </div>
+                    <div class="beer-desc">${desc.split('ABV')[1] || desc}</div>
+                    ${statsHtml}
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+</script>
+
+</body>
+</html>
